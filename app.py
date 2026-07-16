@@ -201,27 +201,43 @@ def _normalize(row):
     }
 
 
-def _first_account(token):
-    d = _graph("me/adaccounts", {"fields": "account_id,name", "limit": 1}, token)
-    rows = d.get("data", [])
-    if not rows:
-        raise RuntimeError("Bu hesaba bagli reklam hesabi bulunamadi.")
-    return "act_" + str(rows[0]["account_id"])
+def _all_accounts(token):
+    d = _graph("me/adaccounts",
+               {"fields": "account_id,name,account_status", "limit": 200}, token)
+    out = []
+    for r in d.get("data", []):
+        out.append(("act_" + str(r["account_id"]), r.get("name") or r["account_id"]))
+    return out
 
 
-def get_insights(date_preset="last_14d", ad_id=None):
+def get_insights(date_preset="last_14d", ad_id=None, account_id=None):
     token = _token()
     if not token:  # DEMO
         if ad_id:
             return [r for r in DEMO_ROWS if r["ad_id"] == ad_id] or [DEMO_ROWS[0]]
         return list(DEMO_ROWS)
     if ad_id:
-        path = f"{ad_id}/insights"
+        data = _graph(f"{ad_id}/insights", {"level": "ad", "fields": FIELDS,
+                      "date_preset": date_preset, "limit": 200}, token)
+        return [_normalize(r) for r in data.get("data", [])]
+    # Hesap(lar) uzerinde gez: belirli hesap ya da tum erisilebilir hesaplar
+    if account_id:
+        acct = account_id if account_id.startswith("act_") else "act_" + account_id
+        accounts = [(acct, acct)]
     else:
-        path = f"{_first_account(token)}/insights"
-    data = _graph(path, {"level": "ad", "fields": FIELDS,
-                         "date_preset": date_preset, "limit": 200}, token)
-    return [_normalize(r) for r in data.get("data", [])]
+        accounts = _all_accounts(token)[:25]
+    rows = []
+    for acct, name in accounts:
+        try:
+            data = _graph(f"{acct}/insights", {"level": "ad", "fields": FIELDS,
+                          "date_preset": date_preset, "limit": 100}, token)
+        except Exception:
+            continue
+        for r in data.get("data", []):
+            m = _normalize(r)
+            m["account"] = name
+            rows.append(m)
+    return rows
 
 
 def get_image(ad_id):
@@ -253,7 +269,8 @@ def fmt(m):
     def g(k, s=""):
         v = m.get(k)
         return f"{v}{s}" if v is not None else "-"
-    return (f"- {m.get('ad_name') or m.get('ad_id')} (id:{m.get('ad_id')})\n"
+    acc = f" [{m['account']}]" if m.get("account") else ""
+    return (f"- {m.get('ad_name') or m.get('ad_id')} (id:{m.get('ad_id')}){acc}\n"
             f"  Gosterim:{g('impressions')} Harcama:{g('spend')} | CTR(link):{g('link_ctr_pct','%')} "
             f"CTR:{g('ctr_all_pct','%')} CPC:{g('cpc')} CPM:{g('cpm')}\n"
             f"  Thumbstop:{g('thumbstop_pct','%')} Hold:{g('hold_rate_pct','%')} Freq:{g('frequency')} | "
@@ -262,15 +279,32 @@ def fmt(m):
 
 # ----------------------------------------------------------------- tools
 @mcp.tool
-def list_creatives(date_preset: str = "last_14d"):
-    """Baglanan Meta reklam hesabindaki kreatifleri (banner) metrikleriyle listeler,
-    link CTR'a gore siralar. Analiz oncesi bunu cagir."""
+def list_ad_accounts():
+    """Baglanan Facebook hesabinin erisebildigi TUM reklam hesaplarini (id + isim)
+    listeler. Hangi hesabin kreatiflerine bakacagini secmek icin kullan."""
+    token = _token()
+    if not token:
+        return "DEMO modu: gercek reklam hesabi yok."
     try:
-        rows = get_insights(date_preset)
+        accs = _all_accounts(token)
+    except Exception as e:
+        return f"HATA: {e}"
+    if not accs:
+        return "Bu Facebook hesabiyla erisilebilen reklam hesabi yok (ads_read izni/rolu gerekli)."
+    return f"{len(accs)} reklam hesabi:\n" + "\n".join(f"- {n}  (id: {a})" for a, n in accs)
+
+
+@mcp.tool
+def list_creatives(date_preset: str = "last_14d", account_id: str = ""):
+    """Kreatifleri (banner) metrikleriyle listeler, link CTR'a gore siralar. account_id
+    verilmezse erisilebilen tum reklam hesaplarini tarar. Analiz oncesi bunu cagir."""
+    try:
+        rows = get_insights(date_preset, account_id=account_id or None)
     except Exception as e:
         return f"HATA: {e}"
     if not rows:
-        return "Bu tarih araliginda kreatif verisi yok."
+        return ("Bu aralikta kreatif verisi bulunamadi. 'list_ad_accounts' ile hesaplari "
+                "gorup belirli bir account_id ile tekrar deneyebilirsin.")
     rows = sorted(rows, key=lambda r: (r.get("link_ctr_pct") or 0), reverse=True)
     tag = "" if AUTH_ENABLED else " [DEMO]"
     return f"{len(rows)} kreatif{tag} ({date_preset}), link CTR'a gore sirali:\n\n" + \
