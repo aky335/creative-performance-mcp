@@ -241,9 +241,11 @@ def get_insights(date_preset="last_14d", ad_id=None, account_id=None):
 
 
 def get_image(ad_id):
+    """(bytes, format, url) dondurur; yoksa None."""
     token = _token()
     if not token:  # DEMO
-        return _demo_image()
+        d = _demo_image()
+        return (d[0], d[1], None) if d else None
     data = _graph(ad_id, {"fields": "creative{image_url,thumbnail_url,asset_feed_spec{images}}"}, token)
     cr = data.get("creative", {}) or {}
     url = cr.get("image_url")
@@ -260,7 +262,7 @@ def get_image(ad_id):
         ct = r.headers.get("content-type", "image/jpeg").split(";")[0]
         fmt = {"image/jpeg": "jpeg", "image/png": "png", "image/gif": "gif",
                "image/webp": "webp"}.get(ct, "jpeg")
-        return r.content, fmt
+        return r.content, fmt, url
     except Exception:
         return None
 
@@ -325,6 +327,8 @@ def analyze_creative(ad_id: str, date_preset: str = "last_14d"):
     if img:
         parts.append("\n=== BANNER GORSELI (asagida) ===")
         parts.append(Image(data=img[0], format=img[1]))
+        if len(img) > 2 and img[2]:
+            parts.append(f"Gorsel URL: {img[2]}")
     else:
         parts.append("\n(Bu kreatif icin gorsel eklenemedi.)")
     parts.append("\n" + CRO_RUBRIC)
@@ -350,6 +354,8 @@ def compare_creatives(ad_ids: list, date_preset: str = "last_14d"):
         parts.append("\n----------------------------------------\n" + fmt(m))
         if img:
             parts.append(Image(data=img[0], format=img[1]))
+            if len(img) > 2 and img[2]:
+                parts.append(f"Gorsel URL: {img[2]}")
     parts.append("\n" + CRO_RUBRIC + "\n\nSON OLARAK: kazanani sec ve zayif kreatif icin "
                  "en yuksek etkili 2-3 iyilestirmeyi belirt.")
     return parts
