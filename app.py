@@ -116,8 +116,18 @@ class FacebookTokenVerifier(TokenVerifier):
             return None
 
 
-def _build_auth():
+def _build_storage():
+    """Kalici depolama: REDIS_URL varsa Redis (deploy/restart'ta oturum korunur),
+    yoksa bellek (gecici)."""
+    redis_url = os.getenv("REDIS_URL", "")
+    if redis_url:
+        from key_value.aio.stores.redis import RedisStore
+        return RedisStore(url=redis_url)
     from key_value.aio.stores.memory import MemoryStore
+    return MemoryStore()
+
+
+def _build_auth():
     verifier = FacebookTokenVerifier(APP_ID, APP_SECRET, required_scopes=["ads_read"])
     return OAuthProxy(
         upstream_authorization_endpoint=f"https://www.facebook.com/{VER}/dialog/oauth",
@@ -131,7 +141,7 @@ def _build_auth():
         token_endpoint_auth_method="client_secret_post",
         jwt_signing_key=APP_SECRET,
         require_authorization_consent=False,
-        client_storage=MemoryStore(),
+        client_storage=_build_storage(),
     )
 
 
