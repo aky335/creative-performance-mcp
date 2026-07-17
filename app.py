@@ -256,29 +256,53 @@ def get_image(ad_id):
     if not token:  # DEMO
         d = _demo_image()
         return (d[0], d[1], None) if d else None
-    fields = ("creative{image_url,thumbnail_url,object_story_spec,"
-              "asset_feed_spec{images}}")
+    import json as _json
+    fields = ("account_id,creative{image_url,thumbnail_url,image_hash,"
+              "object_story_spec{link_data{picture,image_hash},"
+              "photo_data{url,image_hash}},asset_feed_spec{images{url,hash}}}")
     data = _graph(ad_id, {"fields": fields}, token)
+    acct = data.get("account_id")
     cr = data.get("creative", {}) or {}
-    # Tam boy adaylarini topla (64x64 onizleme yerine gercek banner)
-    cands = []
     oss = cr.get("object_story_spec", {}) or {}
     ld = oss.get("link_data", {}) or {}
+    pd = oss.get("photo_data", {}) or {}
+    afs = (cr.get("asset_feed_spec", {}) or {}).get("images", []) or []
+
+    # 1) TAM BOY: image_hash -> adimages permalink_url (kalici, tam cozunurluk)
+    hashes = []
+    for h in (cr.get("image_hash"), ld.get("image_hash"), pd.get("image_hash")):
+        if h:
+            hashes.append(h)
+    for im in afs:
+        if im.get("hash"):
+            hashes.append(im["hash"])
+    full_url = None
+    if acct and hashes:
+        try:
+            d = _graph(f"act_{acct}/adimages",
+                       {"hashes": _json.dumps([hashes[0]]),
+                        "fields": "permalink_url,url"}, token)
+            rows = d.get("data", [])
+            if rows:
+                full_url = rows[0].get("permalink_url") or rows[0].get("url")
+        except Exception:
+            pass
+
+    # 2) Fallback adaylari (p64x64 onizleme olmayan tercih edilir)
+    cands = []
     if ld.get("picture"):
         cands.append(ld["picture"])
-    pd = oss.get("photo_data", {}) or {}
     if pd.get("url"):
         cands.append(pd["url"])
-    for im in (cr.get("asset_feed_spec", {}) or {}).get("images", []) or []:
+    for im in afs:
         if im.get("url"):
             cands.append(im["url"])
     if cr.get("image_url"):
         cands.append(cr["image_url"])
     if cr.get("thumbnail_url"):
         cands.append(cr["thumbnail_url"])
-    # p64x64 (kucuk onizleme) olmayanlari tercih et
-    full = [u for u in cands if "p64x64" not in u]
-    url = full[0] if full else (cands[0] if cands else None)
+    non_thumb = [u for u in cands if "p64x64" not in u]
+    url = full_url or (non_thumb[0] if non_thumb else (cands[0] if cands else None))
     if not url:
         return None
     try:
