@@ -256,14 +256,29 @@ def get_image(ad_id):
     if not token:  # DEMO
         d = _demo_image()
         return (d[0], d[1], None) if d else None
-    data = _graph(ad_id, {"fields": "creative{image_url,thumbnail_url,asset_feed_spec{images}}"}, token)
+    fields = ("creative{image_url,thumbnail_url,object_story_spec,"
+              "asset_feed_spec{images}}")
+    data = _graph(ad_id, {"fields": fields}, token)
     cr = data.get("creative", {}) or {}
-    url = cr.get("image_url")
-    if not url:
-        imgs = (cr.get("asset_feed_spec", {}) or {}).get("images") or []
-        if imgs:
-            url = imgs[0].get("url")
-    url = url or cr.get("thumbnail_url")
+    # Tam boy adaylarini topla (64x64 onizleme yerine gercek banner)
+    cands = []
+    oss = cr.get("object_story_spec", {}) or {}
+    ld = oss.get("link_data", {}) or {}
+    if ld.get("picture"):
+        cands.append(ld["picture"])
+    pd = oss.get("photo_data", {}) or {}
+    if pd.get("url"):
+        cands.append(pd["url"])
+    for im in (cr.get("asset_feed_spec", {}) or {}).get("images", []) or []:
+        if im.get("url"):
+            cands.append(im["url"])
+    if cr.get("image_url"):
+        cands.append(cr["image_url"])
+    if cr.get("thumbnail_url"):
+        cands.append(cr["thumbnail_url"])
+    # p64x64 (kucuk onizleme) olmayanlari tercih et
+    full = [u for u in cands if "p64x64" not in u]
+    url = full[0] if full else (cands[0] if cands else None)
     if not url:
         return None
     try:
