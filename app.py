@@ -44,7 +44,32 @@ INSTRUCTIONS = (
     "verirsin. Metrikleri (CTR, thumbstop, hold, CVR, CPA, ROAS, frequency) gorsel "
     "bulgularla birlestir. KAPSAM DISI konular (butce, teklif, kampanya yapisi, "
     "hedefleme, yerlesim optimizasyonu, pixel/teknik) sorulursa kibarca reddet ve "
-    "konuyu kreatiflere getir."
+    "konuyu kreatiflere getir.\n\n"
+    "ONEMLI - ILK KARSILAMA: Kullanici bu baglayiciyla YENI bir konusmaya basladiginda, "
+    "ilk selamlastiginda, 'merhaba', 'ne yapabilirsin', 'nasil kullanirim' gibi bir sey "
+    "dediginde ya da henuz hicbir arac cagirmadiysan; ONCE 'welcome' aracini cagir ve "
+    "donen hos geldin metnini kullaniciya oldugu gibi, sicak bir sekilde sun. Analize "
+    "gecmeden once kullaniciyi kisaca yonlendir."
+)
+
+WELCOME = (
+    "Hos geldin! Ben **D-Option Kreatif CRO Analistiyim** - Meta (Facebook & Instagram) "
+    "reklam gorsellerinin/banner'larinin performansini analiz eder ve donusumu (CRO) "
+    "artiracak, uygulanabilir oneriler veririm.\n\n"
+    "NELER YAPARIM:\n"
+    "- Banner/gorselin KENDISINI degerlendiririm (hook, hiyerarsi, kontrast, CTA, marka, mobil okunabilirlik)\n"
+    "- Metriklerle birlestiririm (CTR, thumbstop, hold, CVR, CPA, ROAS, frequency)\n"
+    "- Kreatifleri kiyaslar, kazanani ve nedenlerini gosteririm\n"
+    "- Her gozlemi somut, test edilebilir bir iyilestirme onerisine baglarim\n\n"
+    "NELER YAPMAM (kapsam disi):\n"
+    "Butce, teklif/bidding, hedefleme, kampanya yapisi, yerlesim optimizasyonu, pixel/teknik "
+    "kurulum - bunlarda yorum yapmam, konuyu hep kreatife getiririm.\n\n"
+    "HIZLI BASLANGIC (3 adim):\n"
+    "1) 'Reklam hesaplarimi listele'  -> hesaplarini gorurum\n"
+    "2) 'Su hesaptaki kreatifleri listele'  -> banner'lari metrikleriyle siralarim\n"
+    "3) 'Su reklami analiz et' ya da 'Su iki kreatifi karsilastir'  -> derin CRO analizi\n\n"
+    "Ornek: \"Son 30 gunde en dusuk CTR'li 3 banner'i bul ve nasil iyilestirebilecegimi soyle.\"\n\n"
+    "Hazirsan, hangi reklam hesabina bakalim?"
 )
 
 CRO_RUBRIC = (
@@ -329,6 +354,14 @@ def fmt(m):
 
 
 # ----------------------------------------------------------------- tools
+@mcp.tool
+def welcome():
+    """Yeni bir konusmanin basinda cagir: kullaniciya bu aracin ne yaptigini, neyi
+    yapmadigini ve nasil baslayacagini anlatan sicak bir HOS GELDIN metni doner.
+    Kullanici selamlastiginda / 'ne yapabilirsin' dediginde de kullan."""
+    return WELCOME
+
+
 @mcp.tool
 def list_ad_accounts():
     """Baglanan Facebook hesabinin erisebildigi TUM reklam hesaplarini (id + isim)
