@@ -1,41 +1,87 @@
 """
-Creative Performance MCP  (fastmcp v2 + Meta/Facebook OAuth, cok-kiracili)
-=========================================================================
+Creative Performance MCP  (COK-KIRACILI / multi-tenant, token tabanli)
+======================================================================
 Meta (Facebook & Instagram) reklam KREATIFLERININ performansini ve GORSELINI
 CRO odakli degerlendirir. SADECE kreatif konusur.
 
-- Her musteri Claude/ChatGPT'de tek URL'yi ekler, Facebook ile giris yapar,
-  ads_read izni verir; sunucu O MUSTERININ token'iyla kendi reklam hesabini okur.
-- Gorsel analizi API kullanmaz: banner arac sonucunda GORSEL olarak doner,
-  musterinin kendi modeli yorumlar (operatore ek maliyet yok).
+Cok-kiracili model (public OAuth YOK -> App Review beklemesi YOK):
+- Her musteri KENDI URL'i ile baglanir:  https://.../t/<TENANT_KEY>/mcp
+- Sunucu bu key'den musteriyi tanir ve TUM ciktilari YALNIZCA o musterinin
+  reklam hesab(lar)i ile sinirlar. Ajansin diger hesaplari / diger musteriler
+  hicbir kiraciya gorunmez.
+- Meta erisimi bir System User token'i ile yapilir (ajans geneli SHARED_TOKEN
+  ya da kiraci-bazli token). Bu token hicbir musteriye asla dondurulmez;
+  sunucu her cagriyi beyaz-listeye gore kilitler.
 
-Auth, META_APP_ID + META_APP_SECRET tanimliysa acilir. Tanimli degilse DEMO modu
-(ornek veriyle) calisir.  Uc nokta: /mcp
+Env:
+  META_API_VERSION   (varsayilan v21.0)
+  META_SYSTEM_TOKEN  (ajans geneli System User token; kiracida token yoksa kullanilir)
+  TENANTS            (JSON) -> { "<key>": {"name": "...", "accounts": ["act_.."], "token": "..(ops)"} }
+Uc nokta:  /t/<TENANT_KEY>/mcp
 """
 
 from __future__ import annotations
 
 import os
-import time
-import contextlib
+import re
+import json
+import contextvars
 
 import httpx
 from fastmcp import FastMCP
 from fastmcp.utilities.types import Image
-from fastmcp.server.dependencies import get_access_token
-from fastmcp.server.auth import TokenVerifier
-from fastmcp.server.auth.auth import AccessToken
-from fastmcp.server.auth.oauth_proxy import OAuthProxy
 
 # ----------------------------------------------------------------- config
-APP_ID = os.getenv("META_APP_ID", "")
-APP_SECRET = os.getenv("META_APP_SECRET", "")
 VER = os.getenv("META_API_VERSION", "v21.0")
-PUBLIC_URL = (os.getenv("PUBLIC_URL") or os.getenv("RENDER_EXTERNAL_URL")
-              or "http://localhost:8080").rstrip("/")
-AUTH_ENABLED = bool(APP_ID and APP_SECRET)
 GRAPH = "https://graph.facebook.com"
 HERE = os.path.dirname(os.path.abspath(__file__))
+SHARED_TOKEN = os.getenv("META_SYSTEM_TOKEN", "")
+
+
+def _norm_acct(a: str) -> str:
+    a = str(a)
+    return a if a.startswith("act_") else "act_" + a
+
+
+def _load_tenants() -> dict:
+    """TENANTS env (JSON) -> normalize edilmis kiraci defterine."""
+    raw = os.getenv("TENANTS", "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except Exception:
+        return {}
+    out = {}
+    for key, t in (data or {}).items():
+        if not isinstance(t, dict):
+            continue
+        accts = [_norm_acct(a) for a in (t.get("accounts") or [])]
+        out[str(key)] = {
+            "name": t.get("name") or "Musteri",
+            "accounts": accts,
+            "token": t.get("token") or "",
+        }
+    return out
+
+
+TENANTS = _load_tenants()
+
+# Aktif istegin kiracisi (ASGI router her istek basinda set eder)
+_TENANT: contextvars.ContextVar = contextvars.ContextVar("tenant", default=None)
+
+
+def _current():
+    return _TENANT.get()
+
+
+def _token_for(tenant) -> str:
+    return (tenant or {}).get("token") or SHARED_TOKEN or ""
+
+
+def _allowed(tenant) -> list:
+    return list((tenant or {}).get("accounts") or [])
+
 
 INSTRUCTIONS = (
     "Sen bir REKLAM KREATIFI (gorsel/banner) PERFORMANS ve CRO ANALISTISIN. "
@@ -81,7 +127,7 @@ CRO_RUBRIC = (
     "+ Feed/Reels/Stories) 6) 3-5 ONCELIKLI, test edilebilir oneri. SADECE kreatif/gorsel."
 )
 
-# ----------------------------------------------------------------- demo data
+# ----------------------------------------------------------------- demo data (token yoksa)
 DEMO_ROWS = [
     {"ad_id": "1202", "ad_name": "Yaz Indirimi - Statik Banner A", "impressions": 210500,
      "spend": 5620.0, "link_ctr_pct": 1.95, "ctr_all_pct": 2.19, "cpc": 1.37, "cpm": 26.7,
@@ -102,89 +148,12 @@ def _demo_image():
         return None
 
 
-# ----------------------------------------------------------------- Facebook OAuth
-class FacebookTokenVerifier(TokenVerifier):
-    """FB kullanici token'ini debug_token ile dogrular, scope'lari cikarir."""
-
-    def __init__(self, app_id: str, app_secret: str,
-                 required_scopes: list[str] | None = None, timeout: int = 10):
-        super().__init__(required_scopes=required_scopes)
-        self.app_id = app_id
-        self.app_secret = app_secret
-        self.timeout = timeout
-
-    async def verify_token(self, token: str) -> AccessToken | None:
-        try:
-            async with httpx.AsyncClient(timeout=self.timeout) as c:
-                r = await c.get(
-                    f"{GRAPH}/debug_token",
-                    params={"input_token": token,
-                            "access_token": f"{self.app_id}|{self.app_secret}"},
-                )
-            if r.status_code != 200:
-                return None
-            data = r.json().get("data", {})
-            if not data.get("is_valid"):
-                return None
-            scopes = data.get("scopes", []) or []
-            if self.required_scopes and not set(self.required_scopes).issubset(set(scopes)):
-                return None
-            exp = data.get("expires_at") or None
-            return AccessToken(
-                token=token,
-                client_id=str(data.get("user_id", "fb_user")),
-                scopes=scopes,
-                expires_at=int(exp) if exp else None,
-                claims={"user_id": data.get("user_id"), "app_id": data.get("app_id")},
-            )
-        except Exception:
-            return None
-
-
-def _build_storage():
-    """Kalici depolama: REDIS_URL varsa Redis (deploy/restart'ta oturum korunur),
-    yoksa bellek (gecici)."""
-    redis_url = os.getenv("REDIS_URL", "")
-    if redis_url:
-        from key_value.aio.stores.redis import RedisStore
-        return RedisStore(url=redis_url)
-    from key_value.aio.stores.memory import MemoryStore
-    return MemoryStore()
-
-
-def _build_auth():
-    verifier = FacebookTokenVerifier(APP_ID, APP_SECRET, required_scopes=["ads_read"])
-    return OAuthProxy(
-        upstream_authorization_endpoint=f"https://www.facebook.com/{VER}/dialog/oauth",
-        upstream_token_endpoint=f"{GRAPH}/{VER}/oauth/access_token",
-        upstream_client_id=APP_ID,
-        upstream_client_secret=APP_SECRET,
-        token_verifier=verifier,
-        base_url=PUBLIC_URL,
-        redirect_path="/auth/callback",
-        valid_scopes=["ads_read"],
-        token_endpoint_auth_method="client_secret_post",
-        jwt_signing_key=APP_SECRET,
-        require_authorization_consent=False,
-        client_storage=_build_storage(),
-    )
-
-
-auth = _build_auth() if AUTH_ENABLED else None
-mcp = FastMCP(name="creative-performance-mcp", instructions=INSTRUCTIONS, auth=auth)
-
+mcp = FastMCP(name="creative-performance-mcp", instructions=INSTRUCTIONS)
 
 # ----------------------------------------------------------------- Graph helpers
 FIELDS = ("ad_id,ad_name,impressions,inline_link_clicks,ctr,inline_link_click_ctr,"
           "cpc,cpm,spend,frequency,actions,action_values,video_play_actions,"
           "video_p100_watched_actions")
-
-
-def _token() -> str | None:
-    if not AUTH_ENABLED:
-        return None
-    at = get_access_token()
-    return at.token if at else None
 
 
 def _graph(path, params, token):
@@ -236,17 +205,25 @@ def _normalize(row):
     }
 
 
-def _all_accounts(token):
-    d = _graph("me/adaccounts",
-               {"fields": "account_id,name,account_status", "limit": 200}, token)
-    out = []
-    for r in d.get("data", []):
-        out.append(("act_" + str(r["account_id"]), r.get("name") or r["account_id"]))
-    return out
+def _acct_name(acct, token):
+    try:
+        return _graph(acct, {"fields": "name"}, token).get("name")
+    except Exception:
+        return None
 
 
-def get_insights(date_preset="last_14d", ad_id=None, account_id=None):
-    token = _token()
+def _ad_account(ad_id, token):
+    """Reklam ID'sinin ait oldugu hesabi (act_...) dondurur; guvenlik icin sahiplik dogrulamasi."""
+    try:
+        d = _graph(ad_id, {"fields": "account_id"}, token)
+        acc = d.get("account_id")
+        return _norm_acct(acc) if acc else None
+    except Exception:
+        return None
+
+
+def get_insights(token, accounts, date_preset="last_14d", ad_id=None):
+    """accounts = izin verilen hesap listesi (kiracinin beyaz listesi)."""
     if not token:  # DEMO
         if ad_id:
             return [r for r in DEMO_ROWS if r["ad_id"] == ad_id] or [DEMO_ROWS[0]]
@@ -255,14 +232,8 @@ def get_insights(date_preset="last_14d", ad_id=None, account_id=None):
         data = _graph(f"{ad_id}/insights", {"level": "ad", "fields": FIELDS,
                       "date_preset": date_preset, "limit": 200}, token)
         return [_normalize(r) for r in data.get("data", [])]
-    # Hesap(lar) uzerinde gez: belirli hesap ya da tum erisilebilir hesaplar
-    if account_id:
-        acct = account_id if account_id.startswith("act_") else "act_" + account_id
-        accounts = [(acct, acct)]
-    else:
-        accounts = _all_accounts(token)[:25]
     rows = []
-    for acct, name in accounts:
+    for acct in accounts:
         try:
             data = _graph(f"{acct}/insights", {"level": "ad", "fields": FIELDS,
                           "date_preset": date_preset, "limit": 100}, token)
@@ -270,18 +241,16 @@ def get_insights(date_preset="last_14d", ad_id=None, account_id=None):
             continue
         for r in data.get("data", []):
             m = _normalize(r)
-            m["account"] = name
+            m["account"] = acct
             rows.append(m)
     return rows
 
 
-def get_image(ad_id):
+def get_image(token, ad_id):
     """(bytes, format, url) dondurur; yoksa None."""
-    token = _token()
     if not token:  # DEMO
         d = _demo_image()
         return (d[0], d[1], None) if d else None
-    import json as _json
     fields = ("account_id,creative{image_url,thumbnail_url,image_hash,"
               "object_story_spec{link_data{picture,image_hash},"
               "photo_data{url,image_hash}},asset_feed_spec{images{url,hash}}}")
@@ -293,7 +262,6 @@ def get_image(ad_id):
     pd = oss.get("photo_data", {}) or {}
     afs = (cr.get("asset_feed_spec", {}) or {}).get("images", []) or []
 
-    # 1) TAM BOY: image_hash -> adimages permalink_url (kalici, tam cozunurluk)
     hashes = []
     for h in (cr.get("image_hash"), ld.get("image_hash"), pd.get("image_hash")):
         if h:
@@ -305,7 +273,7 @@ def get_image(ad_id):
     if acct and hashes:
         try:
             d = _graph(f"act_{acct}/adimages",
-                       {"hashes": _json.dumps([hashes[0]]),
+                       {"hashes": json.dumps([hashes[0]]),
                         "fields": "permalink_url,url"}, token)
             rows = d.get("data", [])
             if rows:
@@ -313,7 +281,6 @@ def get_image(ad_id):
         except Exception:
             pass
 
-    # 2) Fallback adaylari (p64x64 onizleme olmayan tercih edilir)
     cands = []
     if ld.get("picture"):
         cands.append(ld["picture"])
@@ -364,33 +331,46 @@ def welcome():
 
 @mcp.tool
 def list_ad_accounts():
-    """Baglanan Facebook hesabinin erisebildigi TUM reklam hesaplarini (id + isim)
-    listeler. Hangi hesabin kreatiflerine bakacagini secmek icin kullan."""
-    token = _token()
-    if not token:
-        return "DEMO modu: gercek reklam hesabi yok."
-    try:
-        accs = _all_accounts(token)
-    except Exception as e:
-        return f"HATA: {e}"
-    if not accs:
-        return "Bu Facebook hesabiyla erisilebilen reklam hesabi yok (ads_read izni/rolu gerekli)."
-    return f"{len(accs)} reklam hesabi:\n" + "\n".join(f"- {n}  (id: {a})" for a, n in accs)
+    """Bu musterinin erisebildigi reklam hesab(lar)ini listeler. (Yalnizca kendi
+    hesabini gorur; baska musteri/hesap gorunmez.)"""
+    tenant = _current()
+    if tenant is None:
+        return "Yetkisiz: gecerli musteri baglantisi bulunamadi."
+    allowed = _allowed(tenant)
+    if not allowed:
+        return "Bu musteri icin tanimli reklam hesabi yok. Lutfen operatore bildirin."
+    token = _token_for(tenant)
+    lines = []
+    for acct in allowed:
+        name = _acct_name(acct, token) if token else None
+        lines.append(f"- {name or tenant['name']}  (id: {acct})")
+    return f"{len(allowed)} reklam hesabi:\n" + "\n".join(lines)
 
 
 @mcp.tool
 def list_creatives(date_preset: str = "last_14d", account_id: str = ""):
     """Kreatifleri (banner) metrikleriyle listeler, link CTR'a gore siralar. account_id
-    verilmezse erisilebilen tum reklam hesaplarini tarar. Analiz oncesi bunu cagir."""
+    verilmezse bu musterinin tum hesaplarini tarar. Analiz oncesi bunu cagir."""
+    tenant = _current()
+    if tenant is None:
+        return "Yetkisiz: gecerli musteri baglantisi bulunamadi."
+    allowed = _allowed(tenant)
+    token = _token_for(tenant)
+    if account_id:
+        acct = _norm_acct(account_id)
+        if token and acct not in allowed:
+            return "Bu hesaba erisiminiz yok."
+        scan = [acct]
+    else:
+        scan = allowed
     try:
-        rows = get_insights(date_preset, account_id=account_id or None)
+        rows = get_insights(token, scan, date_preset=date_preset)
     except Exception as e:
         return f"HATA: {e}"
     if not rows:
-        return ("Bu aralikta kreatif verisi bulunamadi. 'list_ad_accounts' ile hesaplari "
-                "gorup belirli bir account_id ile tekrar deneyebilirsin.")
+        return "Bu aralikta kreatif verisi bulunamadi. Tarih araligini genisletmeyi deneyin (or. last_30d/last_90d)."
     rows = sorted(rows, key=lambda r: (r.get("link_ctr_pct") or 0), reverse=True)
-    tag = "" if AUTH_ENABLED else " [DEMO]"
+    tag = "" if token else " [DEMO]"
     return f"{len(rows)} kreatif{tag} ({date_preset}), link CTR'a gore sirali:\n\n" + \
         "\n\n".join(fmt(r) for r in rows)
 
@@ -399,9 +379,19 @@ def list_creatives(date_preset: str = "last_14d", account_id: str = ""):
 def analyze_creative(ad_id: str, date_preset: str = "last_14d"):
     """Tek kreatifi derin analiz eder: metrikleri ceker VE banner'in kendisini GORSEL
     olarak arac sonucuna ekler; sen gorseli gorup CRO odakli oneriler verirsin."""
+    tenant = _current()
+    if tenant is None:
+        return "Yetkisiz: gecerli musteri baglantisi bulunamadi."
+    allowed = _allowed(tenant)
+    token = _token_for(tenant)
+    # Guvenlik: reklam bu musterinin hesabina ait mi?
+    if token:
+        owner = _ad_account(ad_id, token)
+        if owner and owner not in allowed:
+            return "Bu reklam sizin hesabiniza ait degil; erisim reddedildi."
     try:
-        ins = get_insights(date_preset, ad_id)
-        img = get_image(ad_id)
+        ins = get_insights(token, allowed, date_preset=date_preset, ad_id=ad_id)
+        img = get_image(token, ad_id)
     except Exception as e:
         return f"HATA: {e}"
     m = ins[0] if ins else {"ad_id": ad_id}
@@ -421,14 +411,24 @@ def analyze_creative(ad_id: str, date_preset: str = "last_14d"):
 def compare_creatives(ad_ids: list, date_preset: str = "last_14d"):
     """2-5 kreatifi karsilastirir: her birinin metrik + GORSELINI ekler; sen kazanani
     secip metriksel + gorsel/CRO nedenlerini aciklar, zayifa oneri verirsin."""
+    tenant = _current()
+    if tenant is None:
+        return "Yetkisiz: gecerli musteri baglantisi bulunamadi."
+    allowed = _allowed(tenant)
+    token = _token_for(tenant)
     ad_ids = ad_ids[:5]
     if len(ad_ids) < 2:
         return "Karsilastirma icin en az 2 reklam id'si gerekir."
     parts = [f"{len(ad_ids)} kreatif karsilastirmasi ({date_preset}):"]
     for aid in ad_ids:
+        if token:
+            owner = _ad_account(aid, token)
+            if owner and owner not in allowed:
+                parts.append(f"\n[{aid}] Bu reklam sizin hesabiniza ait degil; atlandi.")
+                continue
         try:
-            ins = get_insights(date_preset, aid)
-            img = get_image(aid)
+            ins = get_insights(token, allowed, date_preset=date_preset, ad_id=aid)
+            img = get_image(token, aid)
         except Exception as e:
             parts.append(f"\n[{aid}] HATA: {e}")
             continue
@@ -443,8 +443,64 @@ def compare_creatives(ad_ids: list, date_preset: str = "last_14d"):
     return parts
 
 
-# ----------------------------------------------------------------- app
-app = mcp.http_app(allowed_hosts=["*"], allowed_origins=["*"])
+# ----------------------------------------------------------------- ASGI (per-tenant URL router)
+mcp_app = mcp.http_app(stateless_http=True)
+
+_TPATH = re.compile(r"^/t/([^/]+)(/mcp.*)$")
+
+
+async def _send_json(send, status, body):
+    data = json.dumps(body).encode()
+    await send({"type": "http.response.start", "status": status,
+                "headers": [(b"content-type", b"application/json"),
+                            (b"content-length", str(len(data)).encode())]})
+    await send({"type": "http.response.body", "body": data})
+
+
+class TenantRouter:
+    """/t/<key>/mcp -> key'i cozer, kiraciyi contextvar'a koyar, path'i /mcp'ye
+    yeniden yazip ic MCP uygulamasina devreder. Gecersiz key -> 401."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") != "http":
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        m = _TPATH.match(path)
+        if m:
+            key, rest = m.group(1), m.group(2)
+            tenant = TENANTS.get(key)
+            if not tenant:
+                await _send_json(send, 401, {"error": "unauthorized"})
+                return
+            new_scope = dict(scope)
+            new_scope["path"] = rest
+            rp = scope.get("raw_path")
+            if rp:
+                prefix = ("/t/" + key).encode()
+                if isinstance(rp, (bytes, bytearray)) and rp.startswith(prefix):
+                    new_scope["raw_path"] = rp[len(prefix):]
+            tok = _TENANT.set(tenant)
+            try:
+                await self.app(new_scope, receive, send)
+            finally:
+                _TENANT.reset(tok)
+            return
+        if path == "/" or path == "/health":
+            await _send_json(send, 200, {"ok": True, "service": "creative-performance-mcp",
+                                         "tenants": len(TENANTS)})
+            return
+        if path.startswith("/mcp"):
+            await _send_json(send, 401,
+                             {"error": "unauthorized - use your tenant URL: /t/<key>/mcp"})
+            return
+        await self.app(scope, receive, send)
+
+
+app = TenantRouter(mcp_app)
 
 
 if __name__ == "__main__":
