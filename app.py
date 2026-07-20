@@ -252,7 +252,7 @@ def get_image(token, ad_id):
         d = _demo_image()
         return (d[0], d[1], None) if d else None
     afs_fields = ("asset_feed_spec{images{url,hash},"
-                  "videos{video_id,thumbnail_url,url}}")
+                  "videos{video_id,thumbnail_url}}")
     fields = ("account_id,creative{image_url,thumbnail_url,image_hash,video_id,"
               "object_story_spec{link_data{picture,image_hash},"
               "photo_data{url,image_hash},video_data{video_id,image_url}},"
