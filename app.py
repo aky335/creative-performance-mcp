@@ -251,22 +251,30 @@ def get_image(token, ad_id):
     if not token:  # DEMO
         d = _demo_image()
         return (d[0], d[1], None) if d else None
-    fields = ("account_id,creative{image_url,thumbnail_url,image_hash,"
+    afs_fields = ("asset_feed_spec{images{url,hash},"
+                  "videos{video_id,thumbnail_url,url}}")
+    fields = ("account_id,creative{image_url,thumbnail_url,image_hash,video_id,"
               "object_story_spec{link_data{picture,image_hash},"
-              "photo_data{url,image_hash}},asset_feed_spec{images{url,hash}}}")
-    data = _graph(ad_id, {"fields": fields}, token)
+              "photo_data{url,image_hash},video_data{video_id,image_url}},"
+              + afs_fields + "}")
+    # thumbnail_width/height -> Meta 64x64 yerine buyuk (tam cozunurluge yakin) onizleme doner
+    data = _graph(ad_id, {"fields": fields,
+                          "thumbnail_width": 1080, "thumbnail_height": 1080}, token)
     acct = data.get("account_id")
     cr = data.get("creative", {}) or {}
     oss = cr.get("object_story_spec", {}) or {}
     ld = oss.get("link_data", {}) or {}
     pd = oss.get("photo_data", {}) or {}
-    afs = (cr.get("asset_feed_spec", {}) or {}).get("images", []) or []
+    vd = oss.get("video_data", {}) or {}
+    afs_img = (cr.get("asset_feed_spec", {}) or {}).get("images", []) or []
+    afs_vid = (cr.get("asset_feed_spec", {}) or {}).get("videos", []) or []
 
+    # 1) STATIK TAM BOY: image_hash -> adimages permalink_url (reklamverenin yukledigi orijinal)
     hashes = []
     for h in (cr.get("image_hash"), ld.get("image_hash"), pd.get("image_hash")):
         if h:
             hashes.append(h)
-    for im in afs:
+    for im in afs_img:
         if im.get("hash"):
             hashes.append(im["hash"])
     full_url = None
@@ -281,20 +289,52 @@ def get_image(token, ad_id):
         except Exception:
             pass
 
+    # 2) VIDEO TAM KARE: video_id -> /thumbnails -> is_preferred uri (64x64 degil, gercek kare)
+    video_url = None
+    if not full_url:
+        vids = []
+        for v in (cr.get("video_id"), vd.get("video_id")):
+            if v:
+                vids.append(v)
+        for v in afs_vid:
+            if v.get("video_id"):
+                vids.append(v["video_id"])
+        for vid in vids:
+            try:
+                d = _graph(f"{vid}/thumbnails",
+                           {"fields": "uri,is_preferred,width,height"}, token)
+                thumbs = d.get("data", []) or []
+                if thumbs:
+                    pref = [t for t in thumbs if t.get("is_preferred")]
+                    pick = (pref or sorted(
+                        thumbs, key=lambda t: (t.get("width") or 0), reverse=True))[0]
+                    if pick.get("uri"):
+                        video_url = pick["uri"]
+                        break
+            except Exception:
+                continue
+
+    # 3) Buyutulmus thumbnail_url + diger adaylar (p64x64 olmayan tercih edilir)
     cands = []
     if ld.get("picture"):
         cands.append(ld["picture"])
     if pd.get("url"):
         cands.append(pd["url"])
-    for im in afs:
+    if vd.get("image_url"):
+        cands.append(vd["image_url"])
+    for im in afs_img:
         if im.get("url"):
             cands.append(im["url"])
+    for v in afs_vid:
+        if v.get("thumbnail_url"):
+            cands.append(v["thumbnail_url"])
     if cr.get("image_url"):
         cands.append(cr["image_url"])
     if cr.get("thumbnail_url"):
         cands.append(cr["thumbnail_url"])
     non_thumb = [u for u in cands if "p64x64" not in u]
-    url = full_url or (non_thumb[0] if non_thumb else (cands[0] if cands else None))
+    url = (full_url or video_url or (non_thumb[0] if non_thumb else
+           (cands[0] if cands else None)))
     if not url:
         return None
     try:
